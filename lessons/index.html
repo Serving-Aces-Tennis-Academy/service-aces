@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-nsnoetf/PYEa/RuS3oWUTuMs11l2TnGSrzPFmWwKmLY='; style-src 'sha256-5xcM0OTFRzbXs0712xVJfDQLeV4kkcHAx01kdTg6Kh4=' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-P0FFV5f7OwOr1AdLjYYZcdCLLxRTlday162rtTGkXq4='; style-src 'sha256-rKuUGXhbnv86gaAvwDby695R+bP35CTII4xtbzAFAm8=' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 
@@ -191,6 +191,7 @@ textarea[data-s="h90"]{min-height:90px}
 .wording[open]{gap:14px}
 details.wording{display:block}
 details.wording>*:not(summary){margin-top:14px}
+.notes-text{white-space:pre-wrap;font-size:16px;line-height:1.45;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -383,6 +384,7 @@ details.wording>*:not(summary){margin-top:14px}
   /* ---------------- navigation ---------------- */
   function go(screen, opts) {
     S.screen = screen;
+    S.editNotes = null;
     S.toast = null;
     clearTimeout(toastTimer);
     if (opts && opts.id !== undefined) S.id = opts.id;
@@ -749,6 +751,20 @@ details.wording>*:not(summary){margin-top:14px}
       '</form>';
   }
 
+  function notesPanel(x) {
+    if (S.editNotes === x.id) {
+      return '<form class="panel" data-form="notes" data-id="' + esc(x.id) + '">' +
+        '<label class="field">Notes<textarea class="input" name="notes" maxlength="500" data-s="h90" placeholder="Anything to remember: goals, schedule, things to work on\u2026">' + esc(x.notes) + '</textarea></label>' +
+        '<div class="row"><button class="btn btn-ghost grow" type="button" data-act="notesCancel">Cancel</button>' +
+        '<button class="btn btn-primary" data-s="flex2" type="submit">Save notes</button></div></form>';
+    }
+    var has = String(x.notes || '').trim();
+    return '<div class="panel"><div class="between"><span class="panel-title">Notes</span>' +
+      '<button class="link-btn" data-act="notesEdit" data-id="' + esc(x.id) + '">' + (has ? 'Edit' : 'Add') + '</button></div>' +
+      (has ? '<div class="notes-text">' + esc(x.notes) + '</div>' : '<div class="muted small">No notes yet. Tap Add to jot something down.</div>') +
+      '</div>';
+  }
+
   function vStudent() {
     var x = student(S.id);
     if (!x) return '<div class="hero"><h1>Not found</h1><button class="btn btn-primary" data-act="home">Back</button></div>';
@@ -782,6 +798,7 @@ details.wording>*:not(summary){margin-top:14px}
       '<div class="stack"><div class="stack-s" data-s="gap4"><h1>' + esc(x.student) + '</h1>' +
       '<div class="muted" data-s="f15">' + esc([!selfPays(x) && x.parent ? 'Parent: ' + x.parent : (selfPays(x) ? 'Pays for themselves' : ''), x.email].filter(Boolean).join(' · ') || 'No contact info yet') + '</div></div>' +
       '<div class="status ' + x.status + '"><h2>' + esc(title) + '</h2>' + (sub.length ? '<div data-s="f15">' + esc(sub.join(' ')) + '</div>' : '') + '</div>' +
+      notesPanel(x) +
       (x.status !== 'done' && x.status !== 'nopkg' ? '<button class="btn btn-primary" data-act="log" data-id="' + esc(x.id) + '">' + I.plusS + 'Log a ' + esc(unit()) + '</button>' : '') +
       (x.status !== 'nopkg' ? '<button class="btn btn-ghost" data-act="creditOpen" data-id="' + esc(x.id) + '">' + I.refresh + 'Add a ' + esc(unit()) + ' back</button>' : '') +
       '<form class="panel" id="paid" data-form="paid" data-id="' + esc(x.id) + '"><div class="panel-title">' + paidQ + '</div>' + carry +
@@ -910,6 +927,12 @@ details.wording>*:not(summary){margin-top:14px}
       }, function () {});
     },
     closeSheet: function () { S.sheet = null; render(); },
+    notesEdit: function (el) {
+      S.editNotes = el.getAttribute('data-id'); render();
+      var t = app.querySelector('textarea[name="notes"]');
+      if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+    },
+    notesCancel: function () { S.editNotes = null; render(); },
     creditOpen: function (el) { S.sheet = { kind: 'credit', id: el.getAttribute('data-id') }; S.toast = null; render(); },
     credit: function (el) {
       var id = el.getAttribute('data-id'), reason = el.getAttribute('data-reason');
@@ -1033,6 +1056,15 @@ details.wording>*:not(summary){margin-top:14px}
       var body = { student: val(f, 'student'), parent: val(f, 'parent'), email: val(f, 'email'), pkg: pkgFrom(f), used: parseInt(val(f, 'used') || '0', 10), notes: val(f, 'notes'), pays: val(f, 'pays') };
       if (!body.pkg) return toast('Choose a package size.', true);
       api('updateStudent', { id: S.id, student: body }).then(function () { go('student'); loadHistory(S.id); toast('Saved.'); }, function () {});
+    },
+    notes: function (f) {
+      var x = student(f.getAttribute('data-id'));
+      if (!x) return;
+      if (!x.pkg) return toast('Give them a package first (Edit), then add notes.', true);
+      var body = { student: x.student, parent: x.parent, email: x.email, pkg: x.pkg, used: x.used, pays: x.pays, notes: val(f, 'notes') };
+      api('updateStudent', { id: x.id, student: body }).then(function () {
+        S.editNotes = null; render(); toast('Notes saved.'); loadHistory(x.id);
+      }, function () {});
     },
     paid: function (f) {
       var id = f.getAttribute('data-id'), pkg = pkgFrom(f);
